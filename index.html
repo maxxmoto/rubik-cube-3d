@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#eef0f4" />
+<title>Кубик Рубика 3D</title>
+
+<!-- Шрифт (Fontsource CDN) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/inter@5.3.0/latin-400-normal.min.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/inter@5.3.0/latin-500-normal.min.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/inter@5.3.0/latin-600-normal.min.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/inter@5.3.0/cyrillic-400-normal.min.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/inter@5.3.0/cyrillic-500-normal.min.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/inter@5.3.0/cyrillic-600-normal.min.css" />
+
+<style>
+  :root{
+    --ink:#15181d;
+    --muted:#6a7280;
+    --card:rgba(255,255,255,.68);
+    --line:rgba(18,22,28,.10);
+    --sat:env(safe-area-inset-top, 0px);
+    --sab:env(safe-area-inset-bottom, 0px);
+    --sal:env(safe-area-inset-left, 0px);
+    --sar:env(safe-area-inset-right, 0px);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{
+    height:100%; margin:0; padding:0;
+    overflow:hidden;
+    overscroll-behavior:none;          /* без «резинки» и pull-to-refresh */
+    touch-action:none;                 /* жесты полностью у приложения */
+  }
+  body{
+    position:fixed; inset:0;
+    font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink);
+    background:radial-gradient(1100px 720px at 50% 28%, #ffffff 0%, #f4f6f8 42%, #e7eaef 78%, #dfe3e9 100%);
+    -webkit-font-smoothing:antialiased;
+    -webkit-user-select:none; user-select:none;
+    -webkit-touch-callout:none;
+  }
+  canvas#scene{
+    position:fixed; inset:0; display:block; width:100%; height:100%;
+    touch-action:none; cursor:default;
+  }
+
+  /* ---------------- Минималистичный интерфейс ---------------- */
+  .hud{position:fixed; z-index:10;}
+  .hud-tl{
+    top:calc(18px + var(--sat)); left:calc(22px + var(--sal));
+    pointer-events:none;
+  }
+  .hud-tr{
+    top:calc(16px + var(--sat)); right:calc(20px + var(--sar));
+    display:flex; gap:8px; align-items:center;
+  }
+  .hud-bl{
+    left:calc(22px + var(--sal)); bottom:calc(20px + var(--sab));
+    max-width:min(370px, 74vw);
+  }
+  .hud-bl.hidden{display:none;}
+
+  .title{
+    margin:0; font-size:13px; font-weight:600;
+    letter-spacing:.14em; text-transform:uppercase; color:#1b1f26;
+  }
+
+  .btn{
+    pointer-events:auto;
+    font-family:inherit; font-size:12.5px; font-weight:500; letter-spacing:.02em;
+    color:#22262d; background:var(--card);
+    border:1px solid var(--line); border-radius:11px;
+    min-height:38px; padding:9px 14px; cursor:pointer;
+    backdrop-filter:blur(10px) saturate(1.2);
+    -webkit-backdrop-filter:blur(10px) saturate(1.2);
+    box-shadow:0 1px 2px rgba(16,24,40,.05);
+    transition:background .18s, transform .18s, box-shadow .18s, opacity .18s;
+  }
+  .btn:hover:not(:disabled){background:rgba(255,255,255,.95); transform:translateY(-1px); box-shadow:0 8px 18px rgba(16,24,40,.10);}
+  .btn:active:not(:disabled){transform:scale(.97); box-shadow:0 1px 2px rgba(16,24,40,.06);}
+  .btn:disabled{opacity:.4; cursor:default;}
+  .btn.icon{
+    width:38px; min-width:38px; padding:0; display:grid; place-items:center;
+    font-size:14px; font-weight:600; line-height:1; border-radius:50%;
+  }
+
+  .help{
+    position:relative;
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:12px 14px; pointer-events:auto;
+    backdrop-filter:blur(10px) saturate(1.2);
+    -webkit-backdrop-filter:blur(10px) saturate(1.2);
+    box-shadow:0 1px 2px rgba(16,24,40,.04);
+  }
+  .help h2{
+    margin:0 0 7px; font-size:10px; font-weight:600; letter-spacing:.14em;
+    text-transform:uppercase; color:#8b929c;
+  }
+  .help .row{display:flex; align-items:center; gap:9px; font-size:11.5px; color:#4b525c; line-height:1.85;}
+  .help .key{
+    flex:0 0 auto; min-width:112px; text-align:center;
+    font-size:10px; font-weight:500; letter-spacing:.03em; color:#2b3038;
+    background:rgba(255,255,255,.9);
+    border:1px solid rgba(18,22,28,.10); border-bottom-width:2px;
+    border-radius:6px; padding:3px 6px;
+  }
+  .help .close{
+    position:absolute; top:6px; right:6px; width:24px; height:24px;
+    border:0; background:transparent; color:#9aa1ab; font-size:17px; line-height:1;
+    cursor:pointer; border-radius:6px;
+  }
+  .help .close:hover{background:rgba(0,0,0,.05); color:#4b525c;}
+
+  /* только мышь / только касания */
+  body.is-touch .hint-mouse{display:none;}
+  body:not(.is-touch) .hint-touch{display:none;}
+
+  /* ---------------- Мобильная раскладка ---------------- */
+  @media (max-width: 780px), (pointer: coarse){
+    .hud-tl{top:calc(14px + var(--sat)); left:calc(16px + var(--sal));}
+    .title{font-size:12px; letter-spacing:.12em;}
+
+    /* панель подсказок — над нижней панелью кнопок */
+    .hud-bl{
+      left:calc(12px + var(--sal)); right:calc(12px + var(--sar)); bottom:auto;
+      top:calc(64px + var(--sat)); max-width:none;
+    }
+    .help{padding:12px 14px 10px;}
+    .help .row{font-size:12px; line-height:1.95;}
+    .help .key{min-width:104px; font-size:10.5px;}
+
+    /* кнопки — нижней панелью, крупные зоны касания */
+    .hud-tr{
+      top:auto; left:calc(12px + var(--sal)); right:calc(12px + var(--sar));
+      bottom:calc(12px + var(--sab));
+      display:flex; gap:10px;
+    }
+    .hud-tr .btn{flex:1 1 auto; min-height:48px; font-size:14px; border-radius:14px; padding:12px 10px;}
+    .hud-tr .btn.icon{flex:0 0 48px; width:48px; min-width:48px; border-radius:14px; font-size:16px;}
+  }
+  @media (max-width: 780px) and (orientation: landscape), (max-height: 480px){
+    .hud-bl{top:auto; bottom:calc(76px + var(--sab)); left:calc(12px + var(--sal)); right:auto; max-width:min(320px,60vw);}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+
+<div class="hud hud-tl">
+  <p class="title">Кубик Рубика 3×3</p>
+</div>
+
+<div class="hud hud-tr">
+  <button class="btn icon" id="btn-help" type="button" aria-label="Подсказки по управлению" title="Управление">?</button>
+  <button class="btn" id="btn-scramble" type="button">Перемешать</button>
+  <button class="btn" id="btn-reset" type="button">Собрать</button>
+</div>
+
+<div class="hud hud-bl" id="help-panel">
+  <div class="help">
+    <button class="close" id="btn-help-close" type="button" aria-label="Скрыть">×</button>
+    <h2>Управление</h2>
+
+    <!-- Мышь -->
+    <div class="row hint-mouse"><span class="key">ЛКМ + тянуть</span> повернуть слой</div>
+    <div class="row hint-mouse"><span class="key">ПКМ + тянуть</span> вращать камеру</div>
+    <div class="row hint-mouse"><span class="key">Колесо</span> масштаб</div>
+
+    <!-- Касания -->
+    <div class="row hint-touch"><span class="key">1 палец + тянуть</span> повернуть слой</div>
+    <div class="row hint-touch"><span class="key">2 пальца</span> камера и масштаб</div>
+    <div class="row hint-touch"><span class="key">Короткое касание</span> ничего не делает</div>
+  </div>
+</div>
+
+<!-- ============================ БИБЛИОТЕКИ ============================ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/RoundedBoxGeometry.js"></script>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =====================================================================
+     0. ОБЩИЕ НАСТРОЙКИ
+     ===================================================================== */
+  // Определяем устройство с сенсорным экраном (для раскладки и чувствительности)
+  var touchQuery = window.matchMedia('(hover: none) and (pointer: coarse)');
+  var IS_TOUCH = touchQuery.matches || navigator.maxTouchPoints > 1;
+  if (IS_TOUCH) document.body.classList.add('is-touch');
+
+  var SMALL_SCREEN = Math.min(window.innerWidth, window.innerHeight) < 700;
+
+  var CUBIE_SIZE = 1.0;      // ребро одного кубика
+  var SPACING    = 1.055;    // расстояние между центрами → заметный зазор между деталями
+  var CORNER_RAD = 0.12;     // скругление рёбер
+  var SEGMENTS   = SMALL_SCREEN ? 2 : 3;  // плотность скругления (меньше на мобильных)
+
+  var DRAG_THRESHOLD = IS_TOUCH ? 10 : 7; // минимальный сдвиг в px, чтобы считать жест перетаскиванием
+  var DRAG_GAIN      = 2.2;               // усиление жеста (короче физического пути наклейки)
+  var MIN_PX_PER_QUARTER = 70;            // ограничения чувствительности при любом зуме
+  var MAX_PX_PER_QUARTER = 600;
+  var MAX_DRAG_ANGLE = Math.PI * 0.80;    // предел «живого» поворота
+  var SNAP_MS        = 260;               // длительность доводки (easing)
+  var MOVE_MS        = IS_TOUCH ? 170 : 150; // длительность одного хода при перемешивании
+  var QUARTER        = Math.PI / 2;
+
+  // Официальные цвета (западная схема)
+  var COLORS = {
+    U: 0xffffff,  // верх   – белый
+    D: 0xffd500,  // низ    – жёлтый
+    F: 0x009e60,  // перед  – зелёный
+    B: 0x0051ba,  // зад    – синий
+    R: 0xc41e3a,  // право  – красный
+    L: 0xff5800   // лево   – оранжевый
+  };
+  var PLASTIC = 0x141519;
+
+  var AXES = ['x', 'y', 'z'];
+  var AXIS_V = [
+    new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(0, 1, 0),
+    new THREE.Vector3(0, 0, 1)
+  ];
+
+  var easeOutCubic   = function (k) { return 1 - Math.pow(1 - k, 3); };
+  var easeInOutCubic = function (k) { return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; };
+
+  function haptic(ms) {                       // тактильный отклик на мобильных
+    if (IS_TOUCH && navigator.vibrate) { try { navigator.vibrate(ms || 8); } catch (e) {} }
+  }
+
+  /* =====================================================================
+     1. СЦЕНА / КАМЕРА / РЕНДЕРЕР
+     ===================================================================== */
+  var canvas   = document.getElementById('scene');
+  var scene    = new THREE.Scene();
+
+  var camera = new THREE.PerspectiveCamera(34, window.innerWidth / window.innerHeight, 0.1, 200);
+  camera.position.set(4.6, 4.0, 5.6);        // ракурс 3/4
+
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+  // Ограничиваем pixel ratio: на мобильных это заметно влияет на FPS
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, IS_TOUCH ? 1.8 : 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x000000, 0);       // фон задаёт CSS
+  renderer.outputEncoding    = THREE.sRGBEncoding;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+
+  var maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+
+  /* ---------- Свет: простой, но реалистичный ---------- */
+  var hemi = new THREE.HemisphereLight(0xffffff, 0xc9ced6, 0.55);
+  scene.add(hemi);
+
+  var ambient = new THREE.AmbientLight(0xffffff, 0.22);
+  scene.add(ambient);
+
+  var keyLight = new THREE.DirectionalLight(0xffffff, 0.95);
+  keyLight.position.set(6, 9, 7);
+  keyLight.castShadow = true;
+  keyLight.shadow.mapSize.set(SMALL_SCREEN ? 1024 : 2048, SMALL_SCREEN ? 1024 : 2048);
+  keyLight.shadow.camera.near = 1;
+  keyLight.shadow.camera.far  = 30;
+  keyLight.shadow.camera.left = -5;
+  keyLight.shadow.camera.right = 5;
+  keyLight.shadow.camera.top = 5;
+  keyLight.shadow.camera.bottom = -5;
+  keyLight.shadow.bias = -0.0006;
+  keyLight.shadow.normalBias = 0.022;
+  keyLight.shadow.radius = 3;
+  scene.add(keyLight);
+
+  var fillLight = new THREE.DirectionalLight(0xdfe8ff, 0.30);
+  fillLight.position.set(-7, -2, -5);
+  scene.add(fillLight);
+
+  var rimLight = new THREE.DirectionalLight(0xffffff, 0.18);
+  rimLight.position.set(-3, 5, -8);
+  scene.add(rimLight);
+
+  /* ---------- Невидимая плоскость, принимающая мягкую тень ---------- */
+  var ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(60, 60),
+    new THREE.ShadowMaterial({ opacity: 0.17 })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -2.35;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  /* ---------- Окружение: лёгкие отражения на пластике ---------- */
+  (function buildEnvironment() {
+    var cv = document.createElement('canvas');
+    cv.width = 256; cv.height = 128;
+    var g = cv.getContext('2d');
+    var grd = g.createLinearGradient(0, 0, 0, 128);
+    grd.addColorStop(0.00, '#ffffff');
+    grd.addColorStop(0.42, '#eef1f5');
+    grd.addColorStop(0.55, '#cdd3db');
+    grd.addColorStop(1.00, '#8f959e');
+    g.fillStyle = grd; g.fillRect(0, 0, 256, 128);
+    var spot = g.createRadialGradient(64, 22, 2, 64, 22, 70);
+    spot.addColorStop(0, 'rgba(255,255,255,1)');
+    spot.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = spot; g.fillRect(0, 0, 256, 128);
+
+    var tex = new THREE.CanvasTexture(cv);
+    tex.mapping  = THREE.EquirectangularReflectionMapping;
+    tex.encoding = THREE.sRGBEncoding;
+
+    var pmrem = new THREE.PMREMGenerator(renderer);
+    pmrem.compileEquirectangularShader();
+    scene.environment = pmrem.fromEquirectangular(tex).texture;
+    pmrem.dispose();
+    tex.dispose();
+  })();
+
+  /* =====================================================================
+     2. МАТЕРИАЛЫ И ТЕКСТУРЫ (наклейка поверх чёрного пластика)
+     ===================================================================== */
+  function hexToRgb(hex) { return { r: (hex >> 16) & 255, g: (hex >> 8) & 255, b: hex & 255 }; }
+  function mixc(a, b, t) { return Math.round(a + (b - a) * t); }
+  function shade(rgb, amt) {
+    var target = amt >= 0 ? 255 : 0, t = Math.abs(amt);
+    return 'rgb(' + mixc(rgb.r, target, t) + ',' + mixc(rgb.g, target, t) + ',' + mixc(rgb.b, target, t) + ')';
+  }
+  function traceRoundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);          ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function createStickerTexture(hex) {
+    var S = 512;
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = S;
+    var g = cv.getContext('2d');
+    var rgb = hexToRgb(hex);
+
+    // корпус из тёмного пластика
+    g.fillStyle = '#141519';
+    g.fillRect(0, 0, S, S);
+    var vg = g.createRadialGradient(S / 2, S / 2, S * 0.14, S / 2, S / 2, S * 0.72);
+    vg.addColorStop(0, 'rgba(255,255,255,0.06)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.38)');
+    g.fillStyle = vg;
+    g.fillRect(0, 0, S, S);
+
+    // наклейка
+    var pad = S * 0.078, rad = S * 0.14;
+    traceRoundRect(g, pad, pad, S - 2 * pad, S - 2 * pad, rad);
+    var fill = g.createRadialGradient(S * 0.34, S * 0.28, S * 0.03, S * 0.5, S * 0.55, S * 0.80);
+    fill.addColorStop(0.00, shade(rgb, 0.20));
+    fill.addColorStop(0.45, shade(rgb, 0.00));
+    fill.addColorStop(1.00, shade(rgb, -0.17));
+    g.fillStyle = fill;
+    g.fill();
+
+    // кромка наклейки
+    g.lineWidth = S * 0.006;
+    g.strokeStyle = 'rgba(0,0,0,0.30)';
+    g.stroke();
+
+    // верхний блик
+    g.save();
+    traceRoundRect(g, pad, pad, S - 2 * pad, S - 2 * pad, rad);
+    g.clip();
+    var gloss = g.createLinearGradient(0, pad, 0, S * 0.66);
+    gloss.addColorStop(0, 'rgba(255,255,255,0.26)');
+    gloss.addColorStop(1, 'rgba(255,255,255,0.00)');
+    g.fillStyle = gloss;
+    g.fillRect(pad, pad, S - 2 * pad, S * 0.66);
+    g.restore();
+
+    var tex = new THREE.CanvasTexture(cv);
+    tex.encoding   = THREE.sRGBEncoding;
+    tex.anisotropy = maxAnisotropy;
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  function stickerMaterial(hex) {
+    return new THREE.MeshStandardMaterial({
+      map: createStickerTexture(hex),
+      color: 0xffffff,
+      roughness: 0.33,
+      metalness: 0.0,
+      envMapIntensity: 0.55
+    });
+  }
+
+  var MAT = {
+    U: stickerMaterial(COLORS.U),
+    D: stickerMaterial(COLORS.D),
+    F: stickerMaterial(COLORS.F),
+    B: stickerMaterial(COLORS.B),
+    R: stickerMaterial(COLORS.R),
+    L: stickerMaterial(COLORS.L),
+    plastic: new THREE.MeshStandardMaterial({
+      color: PLASTIC, roughness: 0.62, metalness: 0.05, envMapIntensity: 0.35
+    })
+  };
+
+  /* =====================================================================
+     3. СБОРКА КУБА (27 кубиков)
+     ===================================================================== */
+  var cubeGroup = new THREE.Group();
+  scene.add(cubeGroup);
+
+  var cubies = [];
+  // Логическая структура 3×3×3: cubeData[x+1][y+1][z+1] → mesh
+  var cubeData = [[[], [], []], [[], [], []], [[], [], []]];
+
+  var cubieGeometry = THREE.RoundedBoxGeometry
+    ? new THREE.RoundedBoxGeometry(CUBIE_SIZE, CUBIE_SIZE, CUBIE_SIZE, SEGMENTS, CORNER_RAD)
+    : new THREE.BoxGeometry(CUBIE_SIZE, CUBIE_SIZE, CUBIE_SIZE);  // запасной вариант
+
+  for (var xi = -1; xi <= 1; xi++) {
+    for (var yi = -1; yi <= 1; yi++) {
+      for (var zi = -1; zi <= 1; zi++) {
+        // Порядок групп BoxGeometry: +X, -X, +Y, -Y, +Z, -Z
+        var materials = [
+          xi ===  1 ? MAT.R : MAT.plastic,
+          xi === -1 ? MAT.L : MAT.plastic,
+          yi ===  1 ? MAT.U : MAT.plastic,
+          yi === -1 ? MAT.D : MAT.plastic,
+          zi ===  1 ? MAT.F : MAT.plastic,
+          zi === -1 ? MAT.B : MAT.plastic
+        ];
+        var mesh = new THREE.Mesh(cubieGeometry, materials);
+        mesh.position.set(xi * SPACING, yi * SPACING, zi * SPACING);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.userData.coord = { x: xi, y: yi, z: zi };  // логическая позиция (-1..1)
+        cubeGroup.add(mesh);
+        cubies.push(mesh);
+        cubeData[xi + 1][yi + 1][zi + 1] = mesh;
+      }
+    }
+  }
+
+  /* =====================================================================
+     4. СОСТОЯНИЕ ВЗАИМОДЕЙСТВИЯ
+        Наши обработчики регистрируются ДО создания OrbitControls,
+        чтобы логика слоёв имела приоритет над жестами камеры.
+     ===================================================================== */
+  var controls = null;
+
+  var raycaster  = new THREE.Raycaster();
+  var ndc        = new THREE.Vector2();
+  var normalMat3 = new THREE.Matrix3();
+
+  var drag    = null;   // текущий жест перетаскивания слоя
+  var tween   = null;   // активная анимация доводки / программного хода
+  var queue   = [];     // очередь ходов (перемешивание / сборка)
+  var busy    = false;
+  var history = [];     // история ходов для кнопки «Собрать»
+
+  function isBusy() { return busy || tween !== null || queue.length > 0; }
+
+  /* ---------- Проекция: экран ↔ мир ---------- */
+  function canvasRect() { return renderer.domElement.getBoundingClientRect(); }
+
+  // Смещение в пикселях экрана → вектор в мире на глубине указанной точки
+  function screenOffsetToWorld(dxPx, dyPx, worldPoint) {
+    var rect = canvasRect();
+    var a = worldPoint.clone().project(camera);
+    var b = new THREE.Vector3(
+      a.x + (dxPx / rect.width) * 2,
+      a.y - (dyPx / rect.height) * 2,
+      a.z
+    ).unproject(camera);
+    return b.sub(worldPoint);
+  }
+
+  // Направление в мире → направление в пикселях экрана
+  function worldDirToScreen(dir, worldPoint) {
+    var rect = canvasRect();
+    var a = worldPoint.clone().project(camera);
+    var b = worldPoint.clone().addScaledVector(dir, 1).project(camera);
+    return { x: (b.x - a.x) * 0.5 * rect.width, y: -(b.y - a.y) * 0.5 * rect.height };
+  }
+
+  /* ---------- Рейкаст: какой кубик и какая грань нажаты ---------- */
+  function pickCubie(clientX, clientY) {
+    var rect = canvasRect();
+    ndc.x =  ((clientX - rect.left) / rect.width)  * 2 - 1;
+    ndc.y = -((clientY - rect.top)  / rect.height) * 2 + 1;
+    raycaster.setFromCamera(ndc, camera);
+    var hits = raycaster.intersectObjects(cubies, false);
+    if (!hits.length) return null;
+
+    var hit = hits[0];
+    normalMat3.getNormalMatrix(hit.object.matrixWorld);
+    var n = hit.face.normal.clone().applyMatrix3(normalMat3).normalize();
+
+    // нормаль всегда выровнена по оси (все повороты кратны 90°)
+    var ax = Math.abs(n.x), ay = Math.abs(n.y), az = Math.abs(n.z);
+    var snapped = new THREE.Vector3();
+    var axisIndex;
+    if (ax >= ay && ax >= az)      { snapped.set(Math.sign(n.x) || 1, 0, 0); axisIndex = 0; }
+    else if (ay >= ax && ay >= az) { snapped.set(0, Math.sign(n.y) || 1, 0); axisIndex = 1; }
+    else                           { snapped.set(0, 0, Math.sign(n.z) || 1); axisIndex = 2; }
+
+    return { object: hit.object, point: hit.point.clone(), normal: snapped, normalAxis: axisIndex };
+  }
+
+  /* =====================================================================
+     5. РАБОТА СО СЛОЯМИ: точка вращения, выбор деталей, доводка
+     ===================================================================== */
+  function layerValueOf(mesh, axisIndex) {
+    return Math.round(mesh.position.getComponent(axisIndex) / SPACING);
+  }
+
+  function getLayerMeshes(axisIndex, layer) {
+    var out = [];
+    for (var i = 0; i < cubies.length; i++) {
+      if (Math.round(cubies[i].position.getComponent(axisIndex) / SPACING) === layer) out.push(cubies[i]);
+    }
+    return out;
+  }
+
+  function createPivot(axisIndex, layer) {
+    var pivot = new THREE.Group();
+    pivot.name = 'pivot';
+    cubeGroup.add(pivot);
+    var list = getLayerMeshes(axisIndex, layer);
+    for (var i = 0; i < list.length; i++) pivot.attach(list[i]);  // сохраняет мировые трансформации
+    return pivot;
+  }
+
+  // Округляет позицию и ориентацию до точной сетки после поворота
+  var snapM4 = new THREE.Matrix4();
+  function snapTransform(mesh) {
+    mesh.position.set(
+      Math.round(mesh.position.x / SPACING) * SPACING,
+      Math.round(mesh.position.y / SPACING) * SPACING,
+      Math.round(mesh.position.z / SPACING) * SPACING
+    );
+    snapM4.makeRotationFromQuaternion(mesh.quaternion);
+    var e = snapM4.elements;
+    for (var i = 0; i < 16; i++) e[i] = Math.round(e[i]);
+    mesh.quaternion.setFromRotationMatrix(snapM4);
+    mesh.updateMatrix();
+    mesh.userData.coord = {
+      x: Math.round(mesh.position.x / SPACING),
+      y: Math.round(mesh.position.y / SPACING),
+      z: Math.round(mesh.position.z / SPACING)
+    };
+  }
+
+  /* =====================================================================
+     6. АНИМАЦИИ (tween поворота + очередь ходов)
+     ===================================================================== */
+  function startTween(pivot, axisIndex, layer, from, to, duration, record, ease, onDone) {
+    tween = {
+      pivot: pivot, axisIndex: axisIndex, axisName: AXES[axisIndex], layer: layer,
+      from: from, to: to, elapsed: 0, duration: Math.max(1, duration),
+      record: record, ease: ease || easeOutCubic, onDone: onDone || null
+    };
+    busy = true;
+    updateHUD();
+  }
+
+  function stepTween(dtMs) {
+    var tw = tween;
+    tw.elapsed += dtMs;
+    var k = Math.min(1, tw.elapsed / tw.duration);
+    tw.pivot.rotation[tw.axisName] = tw.from + (tw.to - tw.from) * tw.ease(k);
+    if (k >= 1) endTween();
+  }
+
+  function endTween() {
+    var tw = tween;
+    tween = null;
+
+    tw.pivot.rotation[tw.axisName] = tw.to;   // точный угол
+    tw.pivot.updateMatrixWorld(true);
+
+    var kids = tw.pivot.children.slice();
+    for (var i = 0; i < kids.length; i++) {
+      cubeGroup.attach(kids[i]);              // возвращаем деталь в основную группу
+      snapTransform(kids[i]);                 // обновляем логическую структуру
+    }
+    cubeGroup.remove(tw.pivot);
+
+    if (tw.record && Math.abs(tw.to) > 1e-6) {
+      history.push({ axis: tw.axisIndex, layer: tw.layer, turns: Math.round(tw.to / QUARTER) });
+      haptic(8);                              // короткий отклик при фиксации слоя
+    }
+    if (tw.onDone) tw.onDone();
+    if (!queue.length) busy = false;
+    updateHUD();
+  }
+
+  function startQueuedMove() {
+    var mv = queue.shift();
+    var pivot = createPivot(mv.axis, mv.layer);
+    startTween(pivot, mv.axis, mv.layer, 0, mv.turns * QUARTER,
+               mv.duration || MOVE_MS, mv.record !== false, easeInOutCubic, mv.onDone);
+  }
+
+  function enqueueMove(axis, layer, turns, duration, record) {
+    queue.push({ axis: axis, layer: layer, turns: turns, duration: duration, record: record });
+    busy = true;
+    updateHUD();
+  }
+
+  /* =====================================================================
+     7. ВЗАИМОДЕЙСТВИЕ: перетаскивание слоя (ЛКМ / один палец)
+     ===================================================================== */
+  function onPointerDown(e) {
+    // Второй палец во время перетаскивания → отдаём жест камере (зум/орбита)
+    if (drag && (e.pointerType === 'touch' || e.pointerType === 'pen')) { cancelDrag(); return; }
+    if (e.pointerType === 'mouse' && e.button !== 0) return;   // только левая кнопка
+    if (isBusy()) return;                                       // не прерываем анимации
+    if (!controls) return;
+
+    var hit = pickCubie(e.clientX, e.clientY);
+    if (!hit) return;                                           // касание мимо куба
+
+    controls.enabled = false;                                   // отключаем OrbitControls на время жеста
+
+    drag = {
+      pointerId: e.pointerId,
+      pointerType: e.pointerType,
+      object: hit.object,
+      point: hit.point,
+      normal: hit.normal,
+      normalAxis: hit.normalAxis,
+      startX: e.clientX, startY: e.clientY,
+      dx: 0, dy: 0,
+      started: false,
+      axisIndex: -1, layer: 0, pivot: null,
+      screenMotion: null, pxPerQuarter: 200, angle: 0
+    };
+
+    try { renderer.domElement.setPointerCapture(e.pointerId); } catch (err) {}
+    if (e.pointerType === 'mouse') canvas.style.cursor = 'grabbing';
+  }
+
+  // Определяет ось вращения и слой по нормали грани и направлению жеста
+  function beginLayerDrag() {
+    var n = drag.normal;
+    var worldDrag = screenOffsetToWorld(drag.dx, drag.dy, drag.point);
+    worldDrag.addScaledVector(n, -worldDrag.dot(n));   // проекция на плоскость грани
+    if (worldDrag.lengthSq() < 1e-10) return false;
+    worldDrag.normalize();
+
+    var best = null, tmp = new THREE.Vector3();
+    for (var a = 0; a < 3; a++) {
+      if (a === drag.normalAxis) continue;             // только оси, лежащие в плоскости грани
+      tmp.crossVectors(AXIS_V[a], n).normalize();      // направление движения при положительном повороте
+      var score = worldDrag.dot(tmp);
+      if (!best || Math.abs(score) > Math.abs(best.score)) best = { axis: a, score: score, motion: tmp.clone() };
+    }
+    if (!best) return false;
+
+    drag.axisIndex = best.axis;
+    drag.layer     = layerValueOf(drag.object, best.axis);   // слой нажатого кубика вдоль оси
+    drag.pivot     = createPivot(best.axis, drag.layer);
+    drag.screenMotion = worldDirToScreen(best.motion, drag.point);
+
+    // Адаптивная чувствительность: сколько px экрана соответствует повороту на 90°
+    // (зависит от радиуса до оси, зума и размера экрана — удобно и на телефоне, и на десктопе)
+    var axisVec = AXIS_V[best.axis];
+    var radial  = drag.point.clone().addScaledVector(axisVec, -drag.point.dot(axisVec)).length();
+    var pxPerUnit = Math.hypot(drag.screenMotion.x, drag.screenMotion.y) || 1;
+    var pxPerQuarter = (radial * pxPerUnit * QUARTER) / DRAG_GAIN;
+    drag.pxPerQuarter = THREE.MathUtils.clamp(pxPerQuarter, MIN_PX_PER_QUARTER, MAX_PX_PER_QUARTER);
+    return true;
+  }
+
+  function updateLayerDrag() {
+    var sm = drag.screenMotion;
+    var len = Math.hypot(sm.x, sm.y) || 1;
+    var proj = (drag.dx * sm.x + drag.dy * sm.y) / len;      // px вдоль направления вращения
+    var angle = (proj / drag.pxPerQuarter) * QUARTER;        // px → радианы
+    angle = THREE.MathUtils.clamp(angle, -MAX_DRAG_ANGLE, MAX_DRAG_ANGLE);
+    drag.angle = angle;
+    drag.pivot.rotation[AXES[drag.axisIndex]] = angle;       // слой следует за пальцем в реальном времени
+  }
+
+  function onPointerMove(e) {
+    if (!drag) {
+      // Курсор «захвата» при наведении на куб (только мышь)
+      if (e.pointerType === 'mouse' && !isBusy()) {
+        canvas.style.cursor = pickCubie(e.clientX, e.clientY) ? 'grab' : 'default';
+      }
+      return;
+    }
+    if (e.pointerId !== drag.pointerId) return;
+
+    drag.dx = e.clientX - drag.startX;
+    drag.dy = e.clientY - drag.startY;
+
+    if (!drag.started) {
+      if (Math.hypot(drag.dx, drag.dy) < DRAG_THRESHOLD) return;  // порог против случайных касаний
+      if (!beginLayerDrag()) { drag.dx = drag.dy = 0; return; }
+      drag.started = true;
+    }
+    updateLayerDrag();
+  }
+
+  function onPointerUp(e) {
+    if (!drag) return;
+    if (e && e.pointerId !== drag.pointerId) return;
+
+    try { renderer.domElement.releasePointerCapture(drag.pointerId); } catch (err) {}
+    if (controls) controls.enabled = true;
+    if (drag.pointerType === 'mouse') canvas.style.cursor = 'grab';
+
+    if (!drag.started) { drag = null; return; }              // короткое касание → поворота нет
+
+    // Доводка до ближайших 90° с коротким easing
+    var target = THREE.MathUtils.clamp(Math.round(drag.angle / QUARTER) * QUARTER, -Math.PI, Math.PI);
+    var duration = Math.abs(target) < 1e-6 ? 180 : SNAP_MS;
+    startTween(drag.pivot, drag.axisIndex, drag.layer, drag.angle, target, duration, true, easeOutCubic, null);
+    drag = null;
+  }
+
+  function cancelDrag() {
+    if (!drag) return;
+    try { renderer.domElement.releasePointerCapture(drag.pointerId); } catch (err) {}
+    if (drag.started && drag.pivot) {
+      startTween(drag.pivot, drag.axisIndex, drag.layer, drag.angle, 0, 180, false, easeOutCubic, null);
+    }
+    if (controls) controls.enabled = true;
+    canvas.style.cursor = 'default';
+    drag = null;
+  }
+
+  renderer.domElement.addEventListener('pointerdown', onPointerDown, false);
+  renderer.domElement.addEventListener('pointermove', onPointerMove, false);
+  renderer.domElement.addEventListener('pointerup', onPointerUp, false);
+  renderer.domElement.addEventListener('pointercancel', cancelDrag, false);
+  renderer.domElement.addEventListener('contextmenu', function (e) { e.preventDefault(); }, false);
+  window.addEventListener('blur', cancelDrag, false);
+
+  /* =====================================================================
+     8. ORBITCONTROLS С ОГРАНИЧЕНИЯМИ
+     ===================================================================== */
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0, 0);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.075;
+  controls.rotateSpeed   = IS_TOUCH ? 0.65 : 0.85;
+  controls.enableZoom    = true;
+  controls.zoomSpeed     = 0.8;
+  controls.minDistance   = SMALL_SCREEN ? 6.2 : 5.4;
+  controls.maxDistance   = 15;
+  controls.enablePan     = false;
+  controls.mouseButtons  = {
+    LEFT: null,                     // левую кнопку обрабатывает наша логика слоёв
+    MIDDLE: THREE.MOUSE.DOLLY,
+    RIGHT: THREE.MOUSE.ROTATE
+  };
+  controls.touches = {
+    ONE: null,                      // один палец → вращение слоя
+    TWO: THREE.TOUCH.DOLLY_ROTATE   // два пальца → зум + орбита
+  };
+  controls.update();
+
+  /* =====================================================================
+     9. КНОПКИ: ПЕРЕМЕШАТЬ / СОБРАТЬ / ПОДСКАЗКИ
+     ===================================================================== */
+  var btnScramble = document.getElementById('btn-scramble');
+  var btnReset    = document.getElementById('btn-reset');
+  var btnHelp     = document.getElementById('btn-help');
+  var btnHelpClose = document.getElementById('btn-help-close');
+  var helpPanel   = document.getElementById('help-panel');
+  var helpOpen    = true;
+
+  function setHelp(open) {
+    helpOpen = open;
+    helpPanel.classList.toggle('hidden', !open);
+    btnHelp.style.display = open ? 'none' : '';
+  }
+  btnHelp.addEventListener('click', function () { setHelp(true); });
+  btnHelpClose.addEventListener('click', function () { setHelp(false); });
+  setHelp(true);
+
+  function scramble(moves) {
+    if (isBusy()) return;
+    var n = moves || (SMALL_SCREEN ? 20 : 24);
+    var lastAxis = -1;
+    for (var i = 0; i < n; i++) {
+      var axis;
+      do { axis = Math.floor(Math.random() * 3); } while (axis === lastAxis);
+      lastAxis = axis;
+      var layer = Math.floor(Math.random() * 3) - 1;
+      var turns = Math.random() < 0.5 ? -1 : 1;
+      enqueueMove(axis, layer, turns, MOVE_MS, true);
+    }
+    haptic(14);
+  }
+
+  function resetCube() {
+    if (isBusy() || history.length === 0) return;
+    for (var i = history.length - 1; i >= 0; i--) {
+      var m = history[i];
+      enqueueMove(m.axis, m.layer, -m.turns, IS_TOUCH ? 120 : 110, false); // откат в обратном порядке
+    }
+    history.length = 0;
+    haptic(20);
+  }
+
+  btnScramble.addEventListener('click', function () { scramble(0); });
+  btnReset.addEventListener('click', function () { resetCube(); });
+
+  function updateHUD() {
+    var b = isBusy();
+    btnScramble.disabled = b;
+    btnReset.disabled = b || history.length === 0;
+  }
+  updateHUD();
+
+  /* =====================================================================
+     10. АДАПТАЦИЯ К ЭКРАНУ + ЦИКЛ РЕНДЕРА
+     ===================================================================== */
+  function onResize() {
+    var w = window.innerWidth, h = window.innerHeight;
+    var aspect = w / h;
+    SMALL_SCREEN = Math.min(w, h) < 700;
+
+    camera.aspect = aspect;
+    // В портрете куб должен помещаться целиком: расширяем угол обзора
+    camera.fov = aspect < 0.85 ? 52 : (aspect < 1.2 ? 44 : 34);
+    camera.updateProjectionMatrix();
+
+    controls.minDistance = aspect < 1 ? 6.4 : 5.4;
+    controls.update();
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, IS_TOUCH ? 1.8 : 2));
+    renderer.setSize(w, h);
+  }
+  window.addEventListener('resize', onResize, false);
+  window.addEventListener('orientationchange', function () { setTimeout(onResize, 120); }, false);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize, false);
+  onResize();
+
+  var clock = new THREE.Clock();
+
+  function animate() {
+    requestAnimationFrame(animate);
+    var dt = clock.getDelta();
+
+    if (!tween && queue.length) startQueuedMove();
+    if (tween) stepTween(dt * 1000);
+
+    controls.update();                 // нужно при демпфировании
+    renderer.render(scene, camera);
+  }
+  animate();
+
+})();
+</script>
+</body>
+</html>
